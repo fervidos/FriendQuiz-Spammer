@@ -1,0 +1,14 @@
+services:
+  flooder:
+    build: .
+    image: friendquiz-flooder
+    container_name: friendquiz-flooder
+    ports:
+      - "5000:5000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5000
+    volumes:
+      - ./config.json:/app/config.json
+      - ./static:/app/static
+    restart: unless-stopped
