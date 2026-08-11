@@ -70,7 +70,7 @@ Then open **http://localhost:5000**. `config.json` and the dashboard UI are bind
 
 ## ☁️ Deploy with Coolify
 
-Every dashboard setting can be overridden with an environment variable, so the whole config is editable straight from the **Coolify → Environments** tab — no files to touch.
+Every app setting can be overridden with an environment variable, and the whole config is editable straight from the **Coolify → Environments** tab.
 
 1. In Coolify, add a new resource from your Git repository.
 2. Choose **Docker Compose** as the build pack (the repo ships a `docker-compose.yml`).
@@ -78,9 +78,6 @@ Every dashboard setting can be overridden with an environment variable, so the w
 
 | Variable | Setting it controls | Default |
 | -------- | ------------------- | ------- |
-| `APP_PORT` | Host port exposed to the internet | `5000` |
-| `PORT` | Port the app listens on inside the container | `5000` |
-| `HOST` | Bind address | `0.0.0.0` |
 | `QUIZ_CODE` | Quiz code loaded on startup | _(empty)_ |
 | `COUNT` | Total submissions (`0` = unlimited) | `100` |
 | `THREADS` | Concurrent workers (1–64) | `8` |
@@ -93,6 +90,14 @@ Every dashboard setting can be overridden with an environment variable, so the w
 | `MIN_LEN` / `MAX_LEN` | Random-name length bounds | `3` / `8` |
 | `NAME_LETTERS` / `NAME_DIGITS` | Charset toggles (`true`/`false`) | `true` |
 | `NAMES_LIST` | Comma/newline names for `list` mode | _(empty)_ |
+
+### Changing the port
+
+The app listens on **port 5000 inside the container**, which is fixed. To expose it on a different **host** port, edit the mapping in Coolify's **Ports Mappings** section (or change the `ports:` entry in the compose file) — env vars do **not** control the published port. If you hit `Bind for :::5000 failed: port is already allocated`, port 5000 is already in use on your server: pick a free port in Ports Mappings, or delete the old container that's holding 5000.
+
+### Env vars appear locked in the UI?
+
+Some Coolify versions treat variables that come from the compose file as **locked** (view-only). The workaround: delete the entry from the compose file's `environment:` block (or your Coolify copy of it), then add the variable manually in Coolify's **Environment Variables** tab — manually added vars are fully editable and still reach the container. Alternatively, everything here can be changed from the dashboard's own UI, which saves your settings to `config.json` (bind-mounted, so it persists).
 
 Environment variables take precedence over `config.json` and the dashboard defaults, so they always win on restart. A `.env.example` template is included for local development.
 

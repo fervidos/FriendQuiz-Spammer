@@ -2,26 +2,29 @@ services:
   flooder:
     build: .
     image: friendquiz-flooder
-    container_name: friendquiz-flooder
     ports:
-      # Published (host) port and container port, both editable in Coolify.
-      - "${APP_PORT:-5000}:${PORT:-5000}"
+      # The exposed (host) port is managed in Coolify's "Ports Mappings"
+      # section — edit it THERE, not via an env var. Env vars do not control
+      # the port mapping. If 5000 is already in use, pick a free one.
+      - "5000:5000"
     environment:
-      # --- Server ---
-      HOST: ${HOST:-0.0.0.0}
-      PORT: ${PORT:-5000}
-      # --- Quiz ---
+      # --- Server (fixed) ---
+      # The app always listens on 5000 inside the container, which is what
+      # the port mapping above expects. Don't change these.
+      HOST: 0.0.0.0
+      PORT: 5000
+      # --- Editable app settings ---
+      # These show up in Coolify's Environment Variables tab. If a variable
+      # appears locked in your Coolify version, delete it from this block and
+      # add it manually in the Coolify UI instead (managed vars are editable).
       QUIZ_CODE: ${QUIZ_CODE:-}
-      # --- Volume ---
       COUNT: ${COUNT:-100}
       THREADS: ${THREADS:-8}
       DELAY_MS: ${DELAY_MS:-0}
-      # --- Score control ---
       SCORE_MODE: ${SCORE_MODE:-random}   # perfect | exact | range | random
       EXACT_SCORE: ${EXACT_SCORE:-10}
       MIN_SCORE: ${MIN_SCORE:-0}
       MAX_SCORE: ${MAX_SCORE:-10}
-      # --- Names ---
       NAME_MODE: ${NAME_MODE:-random}     # random | counter | list
       NAME_PREFIX: ${NAME_PREFIX:-}
       NAME_SUFFIX: ${NAME_SUFFIX:-}
