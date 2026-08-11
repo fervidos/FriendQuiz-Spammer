@@ -26,7 +26,7 @@ ANSWER_URL = f"{API}/api/answer.php"
 BOARD_URL = f"{API}/api/board.php"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(HERE, "config.json")
+CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(HERE, "config.json"))
 PORT = int(os.environ.get("PORT", "5000"))
 HOST = os.environ.get("HOST", "127.0.0.1")
 

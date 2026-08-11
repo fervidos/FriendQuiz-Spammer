@@ -13,6 +13,8 @@ services:
       # the port mapping above expects. Don't change these.
       HOST: 0.0.0.0
       PORT: 5000
+      # Settings are persisted to a named volume (see `volumes:` below).
+      CONFIG_PATH: /config/config.json
       # --- Editable app settings ---
       # These show up in Coolify's Environment Variables tab. If a variable
       # appears locked in your Coolify version, delete it from this block and
@@ -34,6 +36,11 @@ services:
       NAME_DIGITS: ${NAME_DIGITS:-true}
       NAMES_LIST: ${NAMES_LIST:-}
     volumes:
-      - ./config.json:/app/config.json
-      - ./static:/app/static
+      # Dashboard UI and code come from the image itself — no bind mounts,
+      # which keeps the dashboard reachable even if a host folder is missing.
+      # Settings persist across redeploys in this named volume.
+      - flooder-config:/config
     restart: unless-stopped
+
+volumes:
+  flooder-config:

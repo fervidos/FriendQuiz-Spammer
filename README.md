@@ -64,7 +64,7 @@ python flood.py U4aV9HED -n 500 -t 16 -m perfect
 docker compose up -d --build
 ```
 
-Then open **http://localhost:5000**. `config.json` and the dashboard UI are bind-mounted, so your settings survive restarts.
+Then open **http://localhost:5000** (or **http://localhost:18080** via the compose port mapping). Dashboard UI and code ship inside the image, and your settings persist across restarts in the `flooder-config` named volume.
 
 ---
 
@@ -97,7 +97,7 @@ The app listens on **port 5000 inside the container**, which is fixed, and is ex
 
 ### Env vars appear locked in the UI?
 
-Some Coolify versions treat variables that come from the compose file as **locked** (view-only). The workaround: delete the entry from the compose file's `environment:` block (or your Coolify copy of it), then add the variable manually in Coolify's **Environment Variables** tab — manually added vars are fully editable and still reach the container. Alternatively, everything here can be changed from the dashboard's own UI, which saves your settings to `config.json` (bind-mounted, so it persists).
+Some Coolify versions treat variables that come from the compose file as **locked** (view-only). The workaround: delete the entry from the compose file's `environment:` block (or your Coolify copy of it), then add the variable manually in Coolify's **Environment Variables** tab — manually added vars are fully editable and still reach the container. Alternatively, everything here can be changed from the dashboard's own UI, which saves your settings to the `flooder-config` volume (so it persists across redeploys).
 
 Environment variables take precedence over `config.json` and the dashboard defaults, so they always win on restart. A `.env.example` template is included for local development.
 
