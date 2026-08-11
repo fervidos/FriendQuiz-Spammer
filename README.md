@@ -93,7 +93,7 @@ Every app setting can be overridden with an environment variable, and the whole 
 
 ### Changing the port
 
-The app listens on **port 5000 inside the container**, which is fixed. To expose it on a different **host** port, edit the mapping in Coolify's **Ports Mappings** section (or change the `ports:` entry in the compose file) — env vars do **not** control the published port. If you hit `Bind for :::5000 failed: port is already allocated`, port 5000 is already in use on your server: pick a free port in Ports Mappings, or delete the old container that's holding 5000.
+The app listens on **port 5000 inside the container**, which is fixed, and is exposed on host port **18080** by default (a high, rarely-used port to avoid conflicts). To change it, edit the mapping in Coolify's **Ports Mappings** section (or the `ports:` entry in the compose file) — env vars do **not** control the published port. If you hit `Bind for :::5000 failed: port is already allocated`, that means the container port 5000 is held by an old container on your server — delete it and redeploy, or pick a different container port in the mapping.
 
 ### Env vars appear locked in the UI?
 

@@ -3,10 +3,10 @@ services:
     build: .
     image: friendquiz-flooder
     ports:
-      # The exposed (host) port is managed in Coolify's "Ports Mappings"
-      # section — edit it THERE, not via an env var. Env vars do not control
-      # the port mapping. If 5000 is already in use, pick a free one.
-      - "5000:5000"
+      # App is exposed on a high, rarely-used host port to avoid clashes
+      # with common services. Change it in Coolify's "Ports Mappings"
+      # section (or here) — env vars do not control the port mapping.
+      - "18080:5000"
     environment:
       # --- Server (fixed) ---
       # The app always listens on 5000 inside the container, which is what
