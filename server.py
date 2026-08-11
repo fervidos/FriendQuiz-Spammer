@@ -102,6 +102,8 @@ class Engine:
         self._pause = threading.Event()
         self._pause.set()
         self.workers = []
+        self.sessions = []
+        self._watcher = None
         self.counter = itertools.count(1)
         self.stats = None
         self.log = deque(maxlen=400)
@@ -230,6 +232,8 @@ class Engine:
     def _worker(self, share):
         """Submit answers until this worker's share is done (-1 = unlimited)."""
         session = requests.Session()
+        with self.lock:
+            self.sessions.append(session)
         delay = float(self.config.get("delay_ms", 0)) / 1000.0
         sent = 0
         nq = len(self.quiz["questions"])
@@ -252,12 +256,28 @@ class Engine:
                     self.stats["last"] = {"name": name, "score": sc}
                 self._log("ok", f"{name}  →  {sc}/{nq}")
             except Exception as e:
-                with self.lock:
-                    self.stats["fail"] += 1
-                self._log("err", f"{name}  →  {type(e).__name__}: {e}")
+                # Closing sessions on stop makes in-flight requests throw;
+                # don't count those as real failures.
+                if not self._stop.is_set():
+                    with self.lock:
+                        self.stats["fail"] += 1
+                    self._log("err", f"{name}  →  {type(e).__name__}: {e}")
             sent += 1
             if delay:
                 time.sleep(delay)
+
+    def _watch(self):
+        """Auto-stop once every worker has finished its share.
+
+        Only runs when a finite count was requested; for unlimited runs the
+        workers never exit and this thread simply parks forever. A manual
+        stop sets ``_stop`` first, so the watcher won't double-trigger.
+        """
+        for w in self.workers:
+            w.join()
+        if not self._stop.is_set() and self.running:
+            self._log("sys", "all workers finished, auto-stopping")
+            self.stop()
 
     def start(self, cfg):
         """Begin flooding with the given settings, spawning worker threads."""
@@ -296,16 +316,34 @@ class Engine:
         self.running = True
         for w in self.workers:
             w.start()
+        self._watcher = threading.Thread(target=self._watch, daemon=True)
+        self._watcher.start()
         self._log("sys", f"started: {n_threads} workers → {total if total else 'unlimited'}")
         return {"ok": True}
 
     def stop(self):
-        """Signal all workers to stop and wait for them to exit."""
+        """Signal all workers to stop and wait for them to exit.
+
+        In-flight requests are aborted by closing their sessions, and the
+        join is bounded to a few seconds total so the UI gets a fast reply
+        no matter how many workers were running.
+        """
         if not self.running:
             return {"ok": True}
         self._stop.set()
+        with self.lock:
+            sessions, self.sessions = self.sessions, []
+        for s in sessions:
+            try:
+                s.close()
+            except Exception:
+                pass
+        deadline = time.time() + 3
         for w in self.workers:
-            w.join(timeout=5)
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            w.join(timeout=remaining)
         self.running = False
         self.paused = False
         self._log("sys", "stopped")
