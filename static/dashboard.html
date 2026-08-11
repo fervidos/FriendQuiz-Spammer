@@ -417,6 +417,16 @@ tr.flash td{animation:flash 1.4s ease-out}
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n || 0).toLocaleString('en-US');
+const normCode = v => {
+  v = (v || '').trim();
+  if(v.includes('://') || v.startsWith('//')){
+    try{
+      const seg = new URL(v).pathname.split('/').filter(Boolean);
+      if(seg.length) return seg[seg.length - 1];
+    }catch(e){}
+  }
+  return v;
+};
 let cfg = {};
 let quiz = null;
 let knownIds = new Set();
@@ -438,7 +448,8 @@ function toast(msg, err){
 }
 
 function syncFromDom(){
-  cfg.code = $('code').value.trim();
+  cfg.code = normCode($('code').value);
+  $('code').value = cfg.code;
   cfg.count = parseInt($('count').value) || 0;
   cfg.threads = parseInt($('threads').value) || 8;
   cfg.delay_ms = parseInt($('delay').value) || 0;
@@ -512,7 +523,9 @@ $('maxLen').oninput = () => { $('maxLenVal').textContent = $('maxLen').value; if
 ['letters','digits'].forEach(id => $(id).onchange = saveConfig);
 
 $('loadBtn').onclick = async () => {
-  const res = await api('/api/load_quiz', { code: $('code').value.trim() });
+  const code = normCode($('code').value);
+  $('code').value = code;
+  const res = await api('/api/load_quiz', { code });
   if(!res.ok){ toast('Load failed: ' + (res.error || 'unknown'), true); return; }
   quiz = res.quiz;
   $('quizInfo').innerHTML = `<b>${quiz.title}</b><br>by <b>${quiz.name}</b> · ${quiz.questions} questions` +

@@ -15,6 +15,7 @@ import threading
 import time
 import webbrowser
 from collections import deque
+from urllib.parse import urlparse
 
 import requests
 from flask import Flask, jsonify, request, send_from_directory
@@ -73,6 +74,17 @@ DEFAULTS = {
 }
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+
+
+def _quiz_code(value):
+    """Pull the quiz code out of either a bare code or a full quiz URL."""
+    value = (value or "").strip()
+    if "://" in value or value.startswith("//"):
+        path = urlparse(value).path
+        parts = [p for p in path.split("/") if p]
+        if parts:
+            return parts[-1]
+    return value
 
 
 class Engine:
@@ -144,6 +156,7 @@ class Engine:
 
     def load_quiz(self, code):
         """Fetch the quiz definition and cache it for later payloads."""
+        code = _quiz_code(code)
         r = requests.get(QUIZ_URL, params={"code": code}, timeout=15)
         r.raise_for_status()
         q = r.json()
@@ -250,7 +263,7 @@ class Engine:
         """Begin flooding with the given settings, spawning worker threads."""
         if self.running:
             return {"ok": False, "error": "already running"}
-        code = (cfg.get("code") or self.config["code"]).strip()
+        code = _quiz_code(cfg.get("code") or self.config["code"])
         if not code:
             return {"ok": False, "error": "quiz code is required"}
         if not self.quiz or self.quiz.get("code") != code:
@@ -445,7 +458,7 @@ def status():
 
 @app.get("/api/board")
 def board():
-    code = (request.args.get("code") or engine.config["code"]).strip()
+    code = _quiz_code(request.args.get("code") or engine.config["code"])
     return jsonify(engine.board_data(code))
 
 
