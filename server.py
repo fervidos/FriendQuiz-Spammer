@@ -30,6 +30,28 @@ CONFIG_PATH = os.path.join(HERE, "config.json")
 PORT = int(os.environ.get("PORT", "5000"))
 HOST = os.environ.get("HOST", "127.0.0.1")
 
+# Every dashboard setting can be overridden through an environment variable.
+# This is what makes the config editable from a PaaS such as Coolify —
+# change a variable in the UI, restart the service, done.
+ENV_MAP = {
+    "QUIZ_CODE": "code",
+    "COUNT": "count",
+    "THREADS": "threads",
+    "DELAY_MS": "delay_ms",
+    "SCORE_MODE": "score_mode",
+    "EXACT_SCORE": "exact_score",
+    "MIN_SCORE": "min_score",
+    "MAX_SCORE": "max_score",
+    "NAME_MODE": "name_mode",
+    "NAME_PREFIX": "prefix",
+    "NAME_SUFFIX": "suffix",
+    "MIN_LEN": "min_len",
+    "MAX_LEN": "max_len",
+    "NAME_LETTERS": "letters",
+    "NAME_DIGITS": "digits",
+    "NAMES_LIST": "names_list",
+}
+
 # --- Default dashboard settings, overridable from the UI and saved ---
 DEFAULTS = {
     "code": "",
@@ -60,6 +82,7 @@ class Engine:
         self.lock = threading.Lock()
         self.config = dict(DEFAULTS)
         self._load_config()
+        self._apply_env()
         self.quiz = None
         self.running = False
         self.paused = False
@@ -85,6 +108,27 @@ class Engine:
                     self.config.update(data)
             except Exception:
                 pass
+
+    def _apply_env(self):
+        """Apply environment-variable overrides on top of saved settings.
+
+        Precedence is: environment > config.json > defaults. Types are
+        coerced to match whatever the current config value already is.
+        """
+        for env_name, key in ENV_MAP.items():
+            if env_name not in os.environ:
+                continue
+            value = os.environ[env_name]
+            current = self.config.get(key)
+            if isinstance(current, bool):
+                self.config[key] = value.strip().lower() in ("1", "true", "yes", "on")
+            elif isinstance(current, int):
+                try:
+                    self.config[key] = int(value)
+                except ValueError:
+                    pass
+            else:
+                self.config[key] = value
 
     def save_config(self):
         """Persist the current settings so the UI restores them next time."""

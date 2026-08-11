@@ -68,6 +68,33 @@ Then open **http://localhost:5000**. `config.json` and the dashboard UI are bind
 
 ---
 
+## ☁️ Deploy with Coolify
+
+Every dashboard setting can be overridden with an environment variable, so the whole config is editable straight from the **Coolify → Environments** tab — no files to touch.
+
+1. In Coolify, add a new resource from your Git repository.
+2. Choose **Docker Compose** as the build pack (the repo ships a `docker-compose.yml`).
+3. Under **Environment Variables**, tweak any of the values below and hit deploy/restart.
+
+| Variable | Setting it controls | Default |
+| -------- | ------------------- | ------- |
+| `QUIZ_CODE` | Quiz code loaded on startup | _(empty)_ |
+| `COUNT` | Total submissions (`0` = unlimited) | `100` |
+| `THREADS` | Concurrent workers (1–64) | `8` |
+| `DELAY_MS` | Pause between requests per worker | `0` |
+| `SCORE_MODE` | `perfect`, `exact`, `range` or `random` | `random` |
+| `EXACT_SCORE` | Target score for `exact` mode | `10` |
+| `MIN_SCORE` / `MAX_SCORE` | Range for `range` mode | `0` / `10` |
+| `NAME_MODE` | `random`, `counter` or `list` | `random` |
+| `NAME_PREFIX` / `NAME_SUFFIX` | Wraps generated names | _(empty)_ |
+| `MIN_LEN` / `MAX_LEN` | Random-name length bounds | `3` / `8` |
+| `NAME_LETTERS` / `NAME_DIGITS` | Charset toggles (`true`/`false`) | `true` |
+| `NAMES_LIST` | Comma/newline names for `list` mode | _(empty)_ |
+
+Environment variables take precedence over `config.json` and the dashboard defaults, so they always win on restart.
+
+---
+
 ## 🎛️ Dashboard Options
 
 | Setting | What it does |
