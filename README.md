@@ -1,0 +1,99 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white">
+  <img src="https://img.shields.io/badge/Flask-3.0-lightgrey?style=for-the-badge&logo=flask&logoColor=white">
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge">
+</p>
+
+# FriendQuiz Flooder
+
+**FriendQuiz Flooder** is an automation tool for [FriendQuiz](https://friendquiz.me) that submits bulk answers to any public quiz leaderboard. It works with both the command line and a sleek real-time web dashboard, and it can target **exact scores**, run on **up to 64 concurrent threads**, and be paused, resumed or stopped at any moment.
+
+> 🎯 Perfect scores, realistic random names, live leaderboard tracking — all from your browser.
+
+---
+
+## ✨ Features
+
+- ⚡ **High-throughput flooding** — up to 64 parallel workers with configurable delay between submissions
+- 🎯 **Exact score targeting** — hit a fixed score (e.g. always 8/10) or a random score in any range
+- 🧠 **Perfect mode** — answers every question correctly by reading the answers the quiz API returns in plain text
+- 🏷️ **Flexible name generation** — random, numbered, or your own custom list, with prefix/suffix and charset controls
+- 🖥️ **Live dashboard** — throughput (req/s), progress bar, score histogram, activity log and a live leaderboard panel
+- ⏯️ **Pause / resume / stop** — full control mid-run, or leave it on unlimited mode
+- 🐳 **Docker-ready** — one command to build and run
+- 💾 **Persistent settings** — your quiz code and options auto-save between sessions
+
+---
+
+## 🚀 Quick Start
+
+### Requirements
+
+- Python 3.11+
+- `pip install -r requirements.txt`
+
+### Web dashboard (recommended)
+
+```bash
+python server.py
+```
+
+Your browser opens automatically at **http://127.0.0.1:5000**. Enter a quiz code, tune the settings, hit **Start**.
+
+### Command line
+
+```bash
+python flood.py U4aV9HED -n 500 -t 16 -m perfect
+```
+
+| Option | Description | Default |
+| ------ | ----------- | ------- |
+| `code` | The quiz code from the quiz URL | required |
+| `-n, --count` | Total submissions to send | 100 |
+| `-t, --threads` | Concurrent worker threads | 8 |
+| `-d, --delay` | Seconds to wait between requests per worker | 0 |
+| `-m, --mode` | `random` or `perfect` | random |
+| `--quiet` | Suppress per-batch output | — |
+
+---
+
+## 🐳 Docker
+
+```bash
+docker compose up -d --build
+```
+
+Then open **http://localhost:5000**. `config.json` and the dashboard UI are bind-mounted, so your settings survive restarts.
+
+---
+
+## 🎛️ Dashboard Options
+
+| Setting | What it does |
+| ------- | ------------ |
+| **Total submissions** | How many answers to send (use `∞` for unlimited) |
+| **Concurrency** | Number of parallel workers (1–64) |
+| **Delay** | Pause between requests per worker (ms) |
+| **Score mode** | Perfect / Exact / Range / Random |
+| **Name mode** | Random / Counter / List, with prefix, suffix and length controls |
+
+The live panel shows average score, requests per second, remaining count, ETA and a score histogram — plus the quiz's real leaderboard updating in real time.
+
+---
+
+## 🧠 How It Works
+
+FriendQuiz exposes an unauthenticated JSON API. The quiz definition is fetched from `/api/quiz.php`, which conveniently returns the **correct answer IDs** in the `values` field. The flooder then submits form-encoded answers (`code`, `name`, `q1..qN`) to `/api/answer.php` — the same request the site's own frontend makes — and reads the resulting score and leaderboard back.
+
+---
+
+## ⚠️ Disclaimer
+
+This project is for **educational purposes only**. Flooding a leaderboard with fake submissions may violate FriendQuiz's terms of service. Use it on quizzes you own, and be respectful of other users' leaderboards. The author is not responsible for any misuse.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE)
