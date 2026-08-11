@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FriendQuiz — Control Panel</title>
+<style>
+:root{
+  --bg:#10110f;
+  --surface:#171815;
+  --surface-2:#1d1e1a;
+  --surface-3:#131411;
+  --line:#2a2b26;
+  --line-soft:#22231f;
+  --text:#e7e5dc;
+  --muted:#9a9a90;
+  --faint:#66675f;
+  --accent:#c8b56a;
+  --accent-dim:rgba(200,181,106,.13);
+  --ok:#8fbd88;
+  --bad:#c77d73;
+  --warn:#d1a95d;
+  --mono:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;
+  min-height:100vh;
+  padding:32px 24px 48px;
+}
+.app{max-width:1180px;margin:0 auto}
+
+header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  margin-bottom:28px;
+  padding:0 2px 18px;
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:13px}
+.logo{
+  width:36px;height:36px;border:1px solid #3a3b34;border-radius:8px;
+  background:#1c1d19;display:grid;place-items:center;font-size:17px;
+}
+.brand h1{font-size:18px;font-weight:650;letter-spacing:-.2px}
+.sub{color:var(--faint);font-size:11px;margin-top:1px;letter-spacing:.4px}
+.pill{
+  display:flex;align-items:center;gap:7px;
+  padding:6px 10px;border:1px solid var(--line);border-radius:6px;
+  background:var(--surface-3);font:600 11px var(--mono);
+  color:var(--muted);text-transform:lowercase;
+}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.pill.running{border-color:rgba(143,189,136,.35);color:var(--ok)}
+.pill.running .dot{background:var(--ok);animation:pulse 1.4s ease-in-out infinite}
+.pill.paused{border-color:rgba(209,169,93,.35);color:var(--warn)}
+.pill.paused .dot{background:var(--warn)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+main{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+
+.panel{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:18px;
+  margin-bottom:18px;
+  box-shadow:none;
+}
+.panel h2{
+  font-size:10px;font-weight:700;letter-spacing:1.3px;
+  text-transform:uppercase;color:var(--muted);margin-bottom:13px;
+  display:flex;align-items:baseline;gap:7px;
+}
+.hint{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
+
+.group{
+  padding:0 0 18px;
+  border:0;
+  border-bottom:1px solid var(--line-soft);
+  border-radius:0;
+  background:transparent;
+  margin-bottom:18px;
+}
+.group:last-of-type{border-bottom:0;margin-bottom:16px;padding-bottom:0}
+
+.row{display:flex;gap:7px}
+input[type=text],input[type=number],textarea{
+  width:100%;
+  background:#11120f;
+  border:1px solid #30312c;
+  border-radius:6px;
+  color:var(--text);
+  padding:9px 10px;
+  font:13px/1.4 var(--mono);
+  outline:none;
+  transition:border-color .12s,background .12s;
+}
+input:focus,textarea:focus{
+  border-color:#77704f;
+  background:#151611;
+  box-shadow:none;
+}
+label{display:block;font-size:11px;color:var(--muted);margin:9px 0 4px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 3px}
+.listbox{min-height:90px;resize:vertical;margin-top:9px}
+
+.presets{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px}
+.presets button,.seg button{
+  background:#121310;
+  border:1px solid #30312c;
+  color:var(--muted);
+  border-radius:5px;
+  padding:7px 10px;
+  font:600 11px/1 var(--mono);
+  cursor:pointer;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.presets button:hover,.seg button:hover{border-color:#55564e;color:var(--text)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:5px}
+.seg button{padding:8px 5px}
+.seg button.active{
+  background:var(--accent-dim);
+  border-color:rgba(200,181,106,.48);
+  color:var(--accent);
+  box-shadow:none;
+}
+
+.slider-row{display:flex;align-items:center;gap:10px;margin:12px 0}
+.slider-row span{font-size:11px;color:var(--muted);width:88px;flex-shrink:0}
+.slider-row b{font:600 11px var(--mono);color:var(--text);min-width:40px;text-align:right}
+input[type=range]{
+  flex:1;appearance:none;-webkit-appearance:none;
+  height:3px;border-radius:99px;background:#34352f;
+  outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;
+  width:13px;height:13px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--surface);
+  box-shadow:0 0 0 1px var(--accent);
+  cursor:grab;
+}
+input[type=range]::-moz-range-thumb{
+  width:11px;height:11px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--surface);
+}
+
+.chips{display:flex;gap:6px;margin-top:9px}
+.chip{
+  display:flex;align-items:center;gap:6px;margin:0;
+  padding:6px 8px;border:1px solid #30312c;border-radius:5px;
+  background:#121310;cursor:pointer;font-size:11px;color:var(--muted)
+}
+.chip input{accent-color:var(--accent)}
+
+.btn{
+  border:1px solid #35362f;border-radius:6px;
+  font:600 12px/1 "Segoe UI",sans-serif;
+  padding:10px 14px;cursor:pointer;
+  transition:background .12s,border-color .12s,color .12s,opacity .12s;
+}
+.btn:active{transform:none}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#171710;box-shadow:none}
+.btn.primary:not(:disabled):hover{background:#d3c27f;box-shadow:none}
+.btn.ghost{background:transparent;border-color:#44453d;color:var(--text)}
+.btn.ghost:hover{background:#22231f;border-color:#5a5b51}
+.btn.warn{background:transparent;border-color:rgba(209,169,93,.4);color:var(--warn)}
+.btn.warn:hover{background:rgba(209,169,93,.08)}
+.btn.danger{background:transparent;border-color:rgba(199,125,115,.4);color:var(--bad)}
+.btn.danger:hover{background:rgba(199,125,115,.08)}
+.actions{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:7px}
+.quizinfo{font-size:11px;color:var(--muted);margin-top:9px}
+.quizinfo b{color:var(--text)}
+.quizinfo .tag{
+  display:inline-block;background:var(--accent-dim);
+  border:1px solid rgba(200,181,106,.25);color:var(--accent);
+  border-radius:4px;padding:2px 6px;margin-left:5px;font:600 10px var(--mono)
+}
+
+.counters{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:15px}
+.stat{
+  background:#121310;border:1px solid var(--line);
+  border-radius:6px;padding:12px 8px;text-align:left;
+}
+.stat .num{display:block;font:600 20px/1.1 var(--mono)}
+.stat .lbl{
+  display:block;margin-top:6px;font-size:9px;
+  letter-spacing:.9px;text-transform:uppercase;color:var(--faint)
+}
+.stat .num.okc{color:var(--ok)} .stat .num.badc{color:var(--bad)}
+.progress{height:5px;border-radius:99px;background:#30312c;overflow:hidden;margin-bottom:11px}
+.progress .bar{height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .4s}
+.progress .bar.indet{
+  width:100%;background:linear-gradient(90deg,#8d7e4d,var(--accent),#8d7e4d);
+  background-size:200% 100%;animation:slide 1.6s linear infinite
+}
+@keyframes slide{to{background-position:-200% 0}}
+.meta{
+  display:flex;flex-wrap:wrap;gap:5px 18px;
+  font-size:11px;color:var(--muted);margin-bottom:17px
+}
+.meta b{color:var(--text);font-family:var(--mono)}
+.hist{display:flex;align-items:flex-end;gap:3px;height:70px}
+.hist .col{
+  flex:1;display:flex;flex-direction:column;
+  justify-content:flex-end;align-items:center;gap:3px;height:100%
+}
+.hist .bar{width:100%;background:var(--accent);border-radius:2px 2px 0 0;opacity:.65;min-height:2px}
+.hist .bar:hover{opacity:1}
+.hist .x{font:600 8px var(--mono);color:var(--faint)}
+
+.log{max-height:210px;overflow-y:auto;font:11px/1.6 var(--mono)}
+.log .empty,.empty{color:var(--faint);font-style:italic}
+.log div{padding:3px 6px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log div.k-ok{color:var(--ok)} .log div.k-err{color:var(--bad)} .log div.k-sys{color:#9aa7a2}
+.log div span.t{color:var(--faint);margin-right:8px}
+.log::-webkit-scrollbar{width:6px}
+.log::-webkit-scrollbar-thumb{background:#33342f;border-radius:99px}
+.log::-webkit-scrollbar-track{background:transparent}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  font-size:9px;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--faint);text-align:left;padding:6px 7px;
+  border-bottom:1px solid var(--line)
+}
+td{padding:8px 7px;border-bottom:1px solid rgba(42,43,38,.55);font-family:var(--mono)}
+tr:hover td{background:#1b1c18}
+tr.flash td{animation:flash 1.4s ease-out}
+@keyframes flash{0%{background:rgba(200,181,106,.12)}100%{background:transparent}}
+.medal-0{color:#d8c56e}.medal-1{color:#aaa}.medal-2{color:#b78368}
+.board-body{max-height:360px;overflow-y:auto}
+.board-body::-webkit-scrollbar{width:6px}
+.board-body::-webkit-scrollbar-thumb{background:#33342f;border-radius:99px}
+
+.toast{
+  position:fixed;top:20px;left:50%;
+  transform:translateX(-50%) translateY(-70px);
+  background:#1d1e1a;border:1px solid #41423a;border-radius:6px;
+  padding:9px 14px;font:600 12px "Segoe UI",sans-serif;
+  box-shadow:0 8px 25px rgba(0,0,0,.35);
+  opacity:0;transition:all .2s;z-index:99
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:rgba(199,125,115,.5);color:var(--bad)}
+
+/* layout fixes */
+.row2 label{min-width:0}
+.row2 label input{display:block;margin-top:4px;width:100%}
+
+.slider-row{min-width:0}
+.slider-row input[type=range]{min-width:45px}
+.slider-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#minLenVal,#maxLenVal{min-width:22px}
+#minLen + b{margin-left:-3px}
+#maxLen + b{margin-left:-3px}
+
+@media(max-width:520px){
+  body{padding:20px 12px 36px}
+  header{align-items:flex-start;gap:12px}
+  .brand h1{font-size:16px}
+  .actions{grid-template-columns:1fr}
+  .counters{grid-template-columns:repeat(2,1fr)}
+  .row2{grid-template-columns:1fr}
+  .chips{flex-wrap:wrap}
+}
+
+@media(min-width:521px) and (max-width:900px){
+  .actions{grid-template-columns:1.4fr 1fr 1fr}
+}
+
+@media(max-width:380px){
+  .slider-row{gap:7px}
+  .slider-row span{width:70px}
+  .slider-row b{min-width:34px}
+}
+
+
+.length-row{gap:7px}
+.length-row > span:first-child{width:52px}
+.length-row .range-sep{width:auto;flex:0 0 auto;margin:0 1px;color:var(--faint);overflow:visible}
+.length-row input[type=range]{width:0}
+@media(max-width:380px){
+  .length-row > span:first-child{width:45px}
+  .length-row{gap:5px}
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo">FQ</div>
+      <div><h1>FriendQuiz Flooder</h1><div class="sub">Control Panel</div></div>
+    </div>
+    <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText">idle</span></div>
+  </header>
+
+  <main>
+    <section>
+      <div class="panel">
+        <div class="group">
+          <h2>Quiz</h2>
+          <div class="row">
+            <input type="text" id="code" placeholder="quiz code" spellcheck="false">
+            <button class="btn ghost" id="loadBtn">Load</button>
+          </div>
+          <div class="quizinfo" id="quizInfo">Enter a quiz code to load it</div>
+        </div>
+
+        <div class="group">
+          <h2>Volume <span class="hint">amount</span></h2>
+          <div class="presets" id="presets">
+            <button data-n="10">10</button><button data-n="50">50</button>
+            <button data-n="100">100</button><button data-n="1000">1k</button>
+            <button data-n="10000">10k</button><button data-n="0">∞</button>
+          </div>
+          <label>Total submissions <span id="countTag"></span></label>
+          <input type="number" id="count" min="0" step="1" value="100">
+          <div class="slider-row"><span>Concurrency</span><input type="range" id="threads" min="1" max="64" value="8"><b id="threadsVal">8</b></div>
+          <div class="slider-row"><span>Delay</span><input type="range" id="delay" min="0" max="2000" step="50" value="0"><b id="delayVal">0 ms</b></div>
+        </div>
+
+        <div class="group">
+          <h2>Scoring</h2>
+          <div class="seg" id="scoreMode">
+            <button data-mode="perfect">Perfect</button>
+            <button data-mode="exact">Exact</button>
+            <button data-mode="range">Range</button>
+            <button data-mode="random">Random</button>
+          </div>
+          <div class="score-target" id="exactRow" hidden>
+            <div class="slider-row"><span>Target score</span><input type="range" id="exact" min="0" max="10" value="10"><b id="exactVal">10</b></div>
+          </div>
+          <div class="score-target" id="rangeRow" hidden>
+            <div class="slider-row"><span>Min</span><input type="range" id="minScore" min="0" max="10" value="0"><b id="minVal">0</b></div>
+            <div class="slider-row"><span>Max</span><input type="range" id="maxScore" min="0" max="10" value="10"><b id="maxVal">10</b></div>
+          </div>
+          <div class="hint" id="scoreHint" style="margin-top:8px"></div>
+        </div>
+
+        <div class="group">
+          <h2>Names</h2>
+          <div class="seg" id="nameMode">
+            <button data-mode="random">Random</button>
+            <button data-mode="counter">Counter</button>
+            <button data-mode="list">List</button>
+          </div>
+          <div class="row2">
+            <label>Prefix <input type="text" id="prefix" spellcheck="false"></label>
+            <label>Suffix <input type="text" id="suffix" spellcheck="false"></label>
+          </div>
+          <div class="slider-row length-row"><span>Length</span><input type="range" id="minLen" min="1" max="20" value="3"><b id="minLenVal">3</b><span class="range-sep">–</span><input type="range" id="maxLen" min="1" max="20" value="8"><b id="maxLenVal">8</b></div>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" id="letters" checked> a–z A–Z</label>
+            <label class="chip"><input type="checkbox" id="digits" checked> 0–9</label>
+          </div>
+          <textarea id="namesList" class="listbox" placeholder="one name per line — leave empty to use random" spellcheck="false" hidden></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="startBtn">▶ Start</button>
+          <button class="btn warn" id="pauseBtn" disabled>⏸ Pause</button>
+          <button class="btn danger" id="stopBtn" disabled>■ Stop</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="panel">
+        <h2>Live <span class="hint" id="targetLabel"></span></h2>
+        <div class="counters">
+          <div class="stat"><span class="num" id="sent">0</span><span class="lbl">Sent</span></div>
+          <div class="stat"><span class="num okc" id="ok">0</span><span class="lbl">Success</span></div>
+          <div class="stat"><span class="num badc" id="fail">0</span><span class="lbl">Failed</span></div>
+          <div class="stat"><span class="num" id="rate">0</span><span class="lbl">req/s</span></div>
+        </div>
+        <div class="progress"><div class="bar" id="progressBar"></div></div>
+        <div class="meta">
+          <span>Avg score <b id="avgScore">—</b></span>
+          <span>Elapsed <b id="elapsed">0s</b></span>
+          <span>Remaining <b id="remaining">—</b></span>
+          <span>ETA <b id="eta">—</b></span>
+        </div>
+        <h2 style="margin-top:6px">Score histogram</h2>
+        <div class="hist" id="hist"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Activity</h2>
+        <div class="log" id="log"><div class="empty">—</div></div>
+      </div>
+
+      <div class="panel">
+        <h2>Leaderboard <span class="hint" id="boardCount"></span></h2>
+        <table>
+          <thead><tr><th style="width:44px">#</th><th>Name</th><th style="text-align:right">Score</th></tr></thead>
+        </table>
+        <div class="board-body"><table id="board"></table></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+let cfg = {};
+let quiz = null;
+let knownIds = new Set();
+let toastT = null;
+
+async function api(url, body){
+  const opt = { method: body === undefined ? 'GET' : 'POST' };
+  if(body !== undefined){ opt.headers = {'Content-Type':'application/json'}; opt.body = JSON.stringify(body); }
+  const r = await fetch(url, opt);
+  return r.json();
+}
+
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.className = 'toast', 2600);
+}
+
+function syncFromDom(){
+  cfg.code = $('code').value.trim();
+  cfg.count = parseInt($('count').value) || 0;
+  cfg.threads = parseInt($('threads').value) || 8;
+  cfg.delay_ms = parseInt($('delay').value) || 0;
+  cfg.exact_score = parseInt($('exact').value) || 0;
+  cfg.min_score = parseInt($('minScore').value) || 0;
+  cfg.max_score = parseInt($('maxScore').value) || 0;
+  cfg.prefix = $('prefix').value;
+  cfg.suffix = $('suffix').value;
+  cfg.min_len = parseInt($('minLen').value) || 1;
+  cfg.max_len = parseInt($('maxLen').value) || 1;
+  cfg.letters = $('letters').checked;
+  cfg.digits = $('digits').checked;
+  cfg.names_list = $('namesList').value;
+}
+
+function saveConfig(){
+  syncFromDom();
+  clearTimeout(saveConfig._t);
+  saveConfig._t = setTimeout(() => api('/api/config', cfg), 300);
+}
+
+function applyCfg(c){
+  Object.assign(cfg, c);
+  $('code').value = c.code || '';
+  $('count').value = c.count || 0;
+  $('threads').value = c.threads || 8;   $('threadsVal').textContent = c.threads || 8;
+  $('delay').value = c.delay_ms || 0;    $('delayVal').textContent = (c.delay_ms||0) + ' ms';
+  $('exact').value = c.exact_score || 0; $('exactVal').textContent = c.exact_score || 0;
+  $('minScore').value = c.min_score || 0;$('minVal').textContent = c.min_score || 0;
+  $('maxScore').value = c.max_score || 0;$('maxVal').textContent = c.max_score || 0;
+  $('prefix').value = c.prefix || '';
+  $('suffix').value = c.suffix || '';
+  $('minLen').value = c.min_len || 1;    $('minLenVal').textContent = c.min_len || 1;
+  $('maxLen').value = c.max_len || 1;    $('maxLenVal').textContent = c.max_len || 1;
+  $('letters').checked = c.letters !== false;
+  $('digits').checked = c.digits !== false;
+  $('namesList').value = c.names_list || '';
+  setScoreMode(c.score_mode || 'random');
+  setNameMode(c.name_mode || 'random');
+}
+
+function setScoreMode(m){
+  cfg.score_mode = m;
+  document.querySelectorAll('#scoreMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  $('exactRow').hidden = m !== 'exact';
+  $('rangeRow').hidden = m !== 'range';
+  const hints = {perfect:'Every submission answers all questions correctly.', exact:'Target a fixed score out of 10.', range:'Random score between min and max.', random:'Fully random score.'};
+  $('scoreHint').textContent = hints[m];
+}
+function setNameMode(m){
+  cfg.name_mode = m;
+  document.querySelectorAll('#nameMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  $('namesList').hidden = m !== 'list';
+}
+
+document.querySelectorAll('#scoreMode button').forEach(b => b.onclick = () => { setScoreMode(b.dataset.mode); saveConfig(); });
+document.querySelectorAll('#nameMode button').forEach(b => b.onclick = () => { setNameMode(b.dataset.mode); saveConfig(); });
+document.querySelectorAll('#presets button').forEach(b => b.onclick = () => {
+  $('count').value = parseInt(b.dataset.n);
+  saveConfig();
+});
+$('count').oninput = () => { $('countTag').textContent = parseInt($('count').value) ? '' : '(unlimited — runs until Stop)'; saveConfig(); };
+$('threads').oninput = () => { $('threadsVal').textContent = $('threads').value; saveConfig(); };
+$('delay').oninput = () => { $('delayVal').textContent = $('delay').value + ' ms'; saveConfig(); };
+$('exact').oninput = () => { $('exactVal').textContent = $('exact').value; saveConfig(); };
+$('minScore').oninput = () => { $('minVal').textContent = $('minScore').value; if(parseInt($('minScore').value) > parseInt($('maxScore').value)){ $('maxScore').value = $('minScore').value; $('maxVal').textContent = $('minScore').value; } saveConfig(); };
+$('maxScore').oninput = () => { $('maxVal').textContent = $('maxScore').value; if(parseInt($('maxScore').value) < parseInt($('minScore').value)){ $('minScore').value = $('maxScore').value; $('minVal').textContent = $('maxScore').value; } saveConfig(); };
+$('minLen').oninput = () => { $('minLenVal').textContent = $('minLen').value; if(parseInt($('minLen').value) > parseInt($('maxLen').value)){ $('maxLen').value = $('minLen').value; $('maxLenVal').textContent = $('minLen').value; } saveConfig(); };
+$('maxLen').oninput = () => { $('maxLenVal').textContent = $('maxLen').value; if(parseInt($('maxLen').value) < parseInt($('minLen').value)){ $('minLen').value = $('maxLen').value; $('minLenVal').textContent = $('maxLen').value; } saveConfig(); };
+['prefix','suffix','namesList'].forEach(id => $(id).oninput = saveConfig);
+['letters','digits'].forEach(id => $(id).onchange = saveConfig);
+
+$('loadBtn').onclick = async () => {
+  const res = await api('/api/load_quiz', { code: $('code').value.trim() });
+  if(!res.ok){ toast('Load failed: ' + (res.error || 'unknown'), true); return; }
+  quiz = res.quiz;
+  $('quizInfo').innerHTML = `<b>${quiz.title}</b><br>by <b>${quiz.name}</b> · ${quiz.questions} questions` +
+    (quiz.values ? '<span class="tag">answers readable ✓</span>' : '<span class="tag">no answer leak</span>');
+  const max = quiz.questions;
+  $('exact').max = max; $('exact').value = Math.min(parseInt($('exact').value), max);
+  $('exactVal').textContent = $('exact').value;
+  $('minScore').max = max; $('maxScore').max = max;
+  toast('Quiz loaded — ' + quiz.questions + ' questions');
+};
+
+$('startBtn').onclick = async () => {
+  syncFromDom();
+  if(!cfg.code){ toast('Enter a quiz code first', true); return; }
+  const res = await api('/api/start', cfg);
+  if(!res.ok){ toast('Start failed: ' + (res.error || 'unknown'), true); return; }
+  toast('Flood started');
+};
+$('pauseBtn').onclick = async () => {
+  const res = await api('/api/pause');
+  if(!res.ok){ toast(res.error, true); return; }
+  toast('Paused');
+};
+$('stopBtn').onclick = async () => { await api('/api/stop'); toast('Stopped'); };
+
+function fmtDur(s){
+  s = Math.floor(s || 0);
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = s%60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function renderStats(s){
+  const st = s.stats;
+  const sent = st ? st.ok + st.fail : 0;
+  $('sent').textContent = fmt(sent);
+  $('ok').textContent = fmt(st ? st.ok : 0);
+  $('fail').textContent = fmt(st ? st.fail : 0);
+  $('rate').textContent = fmt(s.rate);
+  $('avgScore').textContent = st && st.ok ? (st.score_sum/st.ok).toFixed(1) : '—';
+  $('elapsed').textContent = fmtDur(s.elapsed);
+  $('remaining').textContent = st && st.total ? fmt(s.remaining) : (st ? '—' : '—');
+  $('eta').textContent = s.eta != null ? fmtDur(s.eta) : '—';
+  $('targetLabel').textContent = st && st.total ? `— target ${fmt(st.total)}` : (st ? '— unlimited' : '');
+  const bar = $('progressBar');
+  if(st && st.total > 0){
+    bar.classList.remove('indet');
+    bar.style.width = Math.min(100, sent/st.total*100) + '%';
+  } else if(st){
+    bar.classList.add('indet');
+  } else {
+    bar.classList.remove('indet');
+    bar.style.width = '0%';
+  }
+  if(st) renderHist(st.scores);
+}
+
+function renderHist(scores){
+  const max = Math.max(1, ...scores);
+  $('hist').innerHTML = scores.map((v,i) =>
+    `<div class="col"><div class="bar" style="height:${(v/max)*100}%" title="${i}: ${fmt(v)}"></div><span class="x">${i}</span></div>`
+  ).join('');
+}
+
+let lastLogLen = 0;
+function renderLog(entries){
+  if(!entries || entries.length === lastLogLen) return;
+  lastLogLen = entries.length;
+  const box = $('log');
+  const frag = entries.slice(-90).map(e =>
+    `<div class="k-${e.kind}"><span class="t">${e.t}</span>${e.text}</div>`
+  ).join('');
+  box.innerHTML = frag || '<div class="empty">—</div>';
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderBoard(b){
+  if(!b.board) return;
+  $('boardCount').textContent = `— ${b.board.length} entries`;
+  const rows = b.board.map((e, i) => {
+    const medal = i < 3 ? `class="medal-${i}"` : '';
+    const isNew = !knownIds.has(e.id) && knownIds.size > 0;
+    knownIds.add(e.id);
+    return `<tr${isNew ? ' class="flash"' : ''}><td><span ${medal}>${i<3 ? ['🥇','🥈','🥉'][i] : i+1}</span></td><td>${e.name}</td><td style="text-align:right">${e.score}</td></tr>`;
+  }).join('');
+  $('board').innerHTML = `<tbody>${rows}</tbody>`;
+}
+
+function updatePill(running, paused){
+  const p = $('statusPill');
+  p.className = 'pill' + (running ? ' running' : paused ? ' paused' : '');
+  $('statusText').textContent = running ? (paused ? 'paused' : 'flooding') : 'idle';
+}
+
+async function tick(){
+  const s = await api('/api/status');
+  updatePill(s.running, s.paused);
+  renderStats(s);
+  renderLog(s.log);
+  const st = s.stats;
+  if(s.running){
+    $('startBtn').disabled = true;
+    $('pauseBtn').disabled = false;
+    $('stopBtn').disabled = false;
+    $('pauseBtn').textContent = s.paused ? '▶ Resume' : '⏸ Pause';
+  } else {
+    $('startBtn').disabled = false;
+    $('pauseBtn').disabled = true;
+    $('stopBtn').disabled = true;
+    $('pauseBtn').textContent = '⏸ Pause';
+    if(st && st.total > 0 && st.ok + st.fail >= st.total){
+      $('statusText').textContent = 'done';
+      $('statusPill').className = 'pill';
+      $('statusPill').querySelector('.dot').style.background = 'var(--ok)';
+    }
+  }
+}
+
+async function tickBoard(){
+  if(!cfg.code) return;
+  const b = await api('/api/board?code=' + encodeURIComponent(cfg.code));
+  if(!b.error) renderBoard(b);
+}
+
+async function init(){
+  const res = await api('/api/config');
+  applyCfg(res.config);
+  $('loadBtn').click();
+  await tick();
+  await tickBoard();
+  setInterval(tick, 1000);
+  setInterval(tickBoard, 3000);
+}
+
+init();
+</script>
+</body>
+</html>
