@@ -4,31 +4,32 @@ services:
     image: friendquiz-flooder
     container_name: friendquiz-flooder
     ports:
-      - "5000:5000"
+      # Published (host) port and container port, both editable in Coolify.
+      - "${APP_PORT:-5000}:${PORT:-5000}"
     environment:
       # --- Server ---
-      HOST: 0.0.0.0
-      PORT: 5000
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-5000}
       # --- Quiz ---
-      QUIZ_CODE: ""
+      QUIZ_CODE: ${QUIZ_CODE:-}
       # --- Volume ---
-      COUNT: 100
-      THREADS: 8
-      DELAY_MS: 0
+      COUNT: ${COUNT:-100}
+      THREADS: ${THREADS:-8}
+      DELAY_MS: ${DELAY_MS:-0}
       # --- Score control ---
-      SCORE_MODE: random          # perfect | exact | range | random
-      EXACT_SCORE: 10
-      MIN_SCORE: 0
-      MAX_SCORE: 10
+      SCORE_MODE: ${SCORE_MODE:-random}   # perfect | exact | range | random
+      EXACT_SCORE: ${EXACT_SCORE:-10}
+      MIN_SCORE: ${MIN_SCORE:-0}
+      MAX_SCORE: ${MAX_SCORE:-10}
       # --- Names ---
-      NAME_MODE: random           # random | counter | list
-      NAME_PREFIX: ""
-      NAME_SUFFIX: ""
-      MIN_LEN: 3
-      MAX_LEN: 8
-      NAME_LETTERS: "true"
-      NAME_DIGITS: "true"
-      NAMES_LIST: ""
+      NAME_MODE: ${NAME_MODE:-random}     # random | counter | list
+      NAME_PREFIX: ${NAME_PREFIX:-}
+      NAME_SUFFIX: ${NAME_SUFFIX:-}
+      MIN_LEN: ${MIN_LEN:-3}
+      MAX_LEN: ${MAX_LEN:-8}
+      NAME_LETTERS: ${NAME_LETTERS:-true}
+      NAME_DIGITS: ${NAME_DIGITS:-true}
+      NAMES_LIST: ${NAMES_LIST:-}
     volumes:
       - ./config.json:/app/config.json
       - ./static:/app/static

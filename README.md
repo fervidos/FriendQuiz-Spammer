@@ -78,6 +78,9 @@ Every dashboard setting can be overridden with an environment variable, so the w
 
 | Variable | Setting it controls | Default |
 | -------- | ------------------- | ------- |
+| `APP_PORT` | Host port exposed to the internet | `5000` |
+| `PORT` | Port the app listens on inside the container | `5000` |
+| `HOST` | Bind address | `0.0.0.0` |
 | `QUIZ_CODE` | Quiz code loaded on startup | _(empty)_ |
 | `COUNT` | Total submissions (`0` = unlimited) | `100` |
 | `THREADS` | Concurrent workers (1–64) | `8` |
@@ -91,7 +94,7 @@ Every dashboard setting can be overridden with an environment variable, so the w
 | `NAME_LETTERS` / `NAME_DIGITS` | Charset toggles (`true`/`false`) | `true` |
 | `NAMES_LIST` | Comma/newline names for `list` mode | _(empty)_ |
 
-Environment variables take precedence over `config.json` and the dashboard defaults, so they always win on restart.
+Environment variables take precedence over `config.json` and the dashboard defaults, so they always win on restart. A `.env.example` template is included for local development.
 
 ---
 
