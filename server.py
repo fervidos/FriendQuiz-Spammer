@@ -6,77 +6,55 @@ small JSON API. All heavy lifting (answer submission, leaderboard reads)
 is done server-side so the browser never talks to FriendQuiz directly.
 """
 
+from __future__ import annotations
+
 import itertools
-import json
+import logging
 import os
 import random
-import string
 import threading
 import time
 import webbrowser
 from collections import deque
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
 from flask import Flask, jsonify, request, send_from_directory
 
-# --- FriendQuiz endpoints (unauthenticated, form-encoded) ---
+from config import CONFIG_PATH, DEFAULTS, ENV_MAP, load_saved_config, save_config, validate_config
+from utils import random_name
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
 API = "https://friendquiz.me"
 QUIZ_URL = f"{API}/api/quiz.php"
 ANSWER_URL = f"{API}/api/answer.php"
 BOARD_URL = f"{API}/api/board.php"
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(HERE, "config.json"))
 PORT = int(os.environ.get("PORT", "5000"))
 HOST = os.environ.get("HOST", "127.0.0.1")
-
-# Every dashboard setting can be overridden through an environment variable.
-# This is what makes the config editable from a PaaS such as Coolify —
-# change a variable in the UI, restart the service, done.
-ENV_MAP = {
-    "QUIZ_CODE": "code",
-    "COUNT": "count",
-    "THREADS": "threads",
-    "DELAY_MS": "delay_ms",
-    "SCORE_MODE": "score_mode",
-    "EXACT_SCORE": "exact_score",
-    "MIN_SCORE": "min_score",
-    "MAX_SCORE": "max_score",
-    "NAME_MODE": "name_mode",
-    "NAME_PREFIX": "prefix",
-    "NAME_SUFFIX": "suffix",
-    "MIN_LEN": "min_len",
-    "MAX_LEN": "max_len",
-    "NAME_LETTERS": "letters",
-    "NAME_DIGITS": "digits",
-    "NAMES_LIST": "names_list",
-}
-
-# --- Default dashboard settings, overridable from the UI and saved ---
-DEFAULTS = {
-    "code": "",
-    "count": 100,
-    "threads": 8,
-    "delay_ms": 0,
-    "score_mode": "random",
-    "exact_score": 10,
-    "min_score": 0,
-    "max_score": 10,
-    "name_mode": "random",
-    "prefix": "",
-    "suffix": "",
-    "min_len": 3,
-    "max_len": 8,
-    "letters": True,
-    "digits": True,
-    "names_list": "",
-}
+API_TOKEN = os.environ.get("API_TOKEN")
+AUTO_OPEN = os.environ.get("AUTO_OPEN", "1").strip().lower() not in {"0", "false", "no"}
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
-def _quiz_code(value):
+@app.before_request
+def enforce_api_auth():
+    if not API_TOKEN:
+        return None
+    if not request.path.startswith("/api/"):
+        return None
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "", 1).strip() if auth.lower().startswith("bearer ") else ""
+    if token == API_TOKEN:
+        return None
+    return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+
+def _quiz_code(value: str | None) -> str:
     """Pull the quiz code out of either a bare code or a full quiz URL."""
     value = (value or "").strip()
     if "://" in value or value.startswith("//"):
@@ -90,52 +68,36 @@ def _quiz_code(value):
 class Engine:
     """Runs the flooding workers and keeps track of their progress."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.lock = threading.Lock()
-        self.config = dict(DEFAULTS)
-        self._load_config()
-        self._apply_env()
-        self.quiz = None
+        self.config = validate_config({**DEFAULTS, **load_saved_config()})
+        self._apply_env_overrides()
+        self.quiz: Optional[Dict[str, Any]] = None
         self.running = False
         self.paused = False
         self._stop = threading.Event()
         self._pause = threading.Event()
         self._pause.set()
-        self.workers = []
-        self.sessions = []
-        self._watcher = None
+        self.workers: List[threading.Thread] = []
+        self.sessions: List[requests.Session] = []
+        self._watcher: Optional[threading.Thread] = None
         self.counter = itertools.count(1)
-        self.stats = None
-        self.log = deque(maxlen=400)
-        self.rate_ts = deque(maxlen=2000)
-        self.board = None
-        self.board_code = None
+        self.stats: Optional[Dict[str, Any]] = None
+        self.log: deque = deque(maxlen=400)
+        self.rate_ts: deque = deque(maxlen=2000)
+        self.board: Optional[Dict[str, Any]] = None
+        self.board_code: Optional[str] = None
         self.board_at = 0.0
 
-    def _load_config(self):
-        """Load previously saved settings from disk, if any."""
-        if os.path.exists(CONFIG_PATH):
-            try:
-                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self.config.update(data)
-            except Exception:
-                pass
-
-    def _apply_env(self):
-        """Apply environment-variable overrides on top of saved settings.
-
-        Precedence is: environment > config.json > defaults. Types are
-        coerced to match whatever the current config value already is.
-        """
+    def _apply_env_overrides(self) -> None:
+        """Apply environment variable overrides on top of saved settings."""
         for env_name, key in ENV_MAP.items():
             if env_name not in os.environ:
                 continue
             value = os.environ[env_name]
             current = self.config.get(key)
             if isinstance(current, bool):
-                self.config[key] = value.strip().lower() in ("1", "true", "yes", "on")
+                self.config[key] = value.strip().lower() in {"1", "true", "yes", "on"}
             elif isinstance(current, int):
                 try:
                     self.config[key] = int(value)
@@ -143,100 +105,90 @@ class Engine:
                     pass
             else:
                 self.config[key] = value
+        self.config = validate_config(self.config)
 
-    def save_config(self):
-        """Persist the current settings so the UI restores them next time."""
-        try:
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
-
-    def _log(self, kind, text):
+    def _log(self, kind: str, text: str) -> None:
         """Append a line to the activity feed shown in the dashboard."""
         self.log.append({"t": time.strftime("%H:%M:%S"), "kind": kind, "text": text})
 
-    def load_quiz(self, code):
+    def load_quiz(self, code: str) -> Dict[str, Any]:
         """Fetch the quiz definition and cache it for later payloads."""
         code = _quiz_code(code)
-        r = requests.get(QUIZ_URL, params={"code": code}, timeout=15)
-        r.raise_for_status()
-        q = r.json()
-        if not q.get("questions"):
+        response = requests.get(QUIZ_URL, params={"code": code}, timeout=15)
+        response.raise_for_status()
+        quiz = response.json()
+        if not quiz.get("questions"):
             raise ValueError(f"no questions found for code '{code}'")
-        self.quiz = q
-        return q
+        self.quiz = quiz
+        return quiz
 
-    def _pick_score(self):
+    def _pick_score(self) -> int:
         """Choose the target score for one submission based on the mode."""
-        n = len(self.quiz["questions"])
-        m = self.config["score_mode"]
-        if m == "perfect":
-            return n
-        if m == "exact":
-            return max(0, min(n, int(self.config.get("exact_score", n))))
-        if m == "range":
-            lo = max(0, min(n, int(self.config.get("min_score", 0))))
-            hi = max(0, min(n, int(self.config.get("max_score", n))))
+        if self.quiz is None:
+            raise RuntimeError("quiz is not loaded")
+        question_count = len(self.quiz.get("questions") or [])
+        mode = self.config["score_mode"]
+
+        if mode == "perfect":
+            return question_count
+        if mode == "exact":
+            return max(0, min(question_count, int(self.config.get("exact_score", question_count))))
+        if mode == "range":
+            lo = max(0, min(question_count, int(self.config.get("min_score", 0))))
+            hi = max(0, min(question_count, int(self.config.get("max_score", question_count))))
             if hi < lo:
                 lo, hi = hi, lo
             return random.randint(lo, hi)
-        return random.randint(0, n)
+        return random.randint(0, question_count)
 
-    def _name(self):
+    def _name(self) -> str:
         """Generate a name according to the configured name strategy."""
         cfg = self.config
-        if cfg["name_mode"] == "counter":
-            return f"{cfg['prefix']}{next(self.counter)}{cfg['suffix']}"
-        if cfg["name_mode"] == "list":
-            names = [x.strip() for x in cfg["names_list"].replace("\n", ",").split(",") if x.strip()]
-            if names:
-                return names[(next(self.counter) - 1) % len(names)]
-        charset = ""
-        if cfg.get("letters"):
-            charset += string.ascii_letters
-        if cfg.get("digits"):
-            charset += string.digits
-        if not charset:
-            charset = string.ascii_letters
-        lo = max(1, int(cfg.get("min_len", 3)))
-        hi = max(lo, int(cfg.get("max_len", 8)))
-        length = random.randint(lo, hi)
-        return cfg["prefix"] + "".join(random.choices(charset, k=length)) + cfg["suffix"]
+        counter = next(self.counter)
+        return random_name(
+            prefix=cfg["prefix"],
+            suffix=cfg["suffix"],
+            letters=cfg.get("letters", True),
+            digits=cfg.get("digits", True),
+            min_len=cfg.get("min_len", 3),
+            max_len=cfg.get("max_len", 8),
+            name_mode=cfg["name_mode"],
+            counter=counter,
+            names_list=cfg.get("names_list", ""),
+        )
 
-    def _payload(self, name):
-        """Build the form payload, hitting the requested score exactly.
+    def _payload(self, name: str) -> Dict[str, Any]:
+        """Build the form payload, hitting the requested score exactly."""
+        if self.quiz is None:
+            raise RuntimeError("quiz is not loaded")
 
-        We know the correct answers up front (the quiz API returns them in
-        the ``values`` field), so reaching an exact score is just a matter
-        of answering that many questions correctly and guessing the rest.
-        """
-        qs = self.quiz["questions"]
+        questions = self.quiz["questions"]
         values = self.quiz.get("values") or []
-        n = len(qs)
+        question_count = len(questions)
         score = self._pick_score()
-        # Pick which questions to answer correctly this round.
-        correct = set(random.sample(range(n), score)) if values else set()
-        data = {"code": self.quiz["code"], "name": name}
-        for i, q in enumerate(qs):
-            opts = q["options"]
-            if values and i < len(values) and i in correct:
-                data[f"q{i + 1}"] = values[i]
+        correct = set(random.sample(range(question_count), score)) if values else set()
+        data: Dict[str, Any] = {"code": self.quiz["code"], "name": name}
+        for index, question in enumerate(questions):
+            options = question["options"]
+            if values and index < len(values) and index in correct:
+                data[f"q{index + 1}"] = values[index]
             else:
-                pool = [o for o in opts]
-                if values and i < len(values):
-                    pool = [o for o in opts if o["option_id"] != values[i]] or pool
-                data[f"q{i + 1}"] = random.choice(pool)["option_id"]
+                pool = [option for option in options]
+                if values and index < len(values):
+                    pool = [option for option in options if option["option_id"] != values[index]] or pool
+                data[f"q{index + 1}"] = random.choice(pool)["option_id"]
         return data
 
-    def _worker(self, share):
+    def _worker(self, share: int) -> None:
         """Submit answers until this worker's share is done (-1 = unlimited)."""
         session = requests.Session()
         with self.lock:
             self.sessions.append(session)
         delay = float(self.config.get("delay_ms", 0)) / 1000.0
         sent = 0
-        nq = len(self.quiz["questions"])
+        if self.quiz is None:
+            return
+        question_count = len(self.quiz["questions"])
         while share < 0 or sent < share:
             if self._stop.is_set():
                 return
@@ -245,64 +197,71 @@ class Engine:
                 return
             name = self._name()
             try:
-                r = session.post(ANSWER_URL, data=self._payload(name), timeout=20)
-                r.raise_for_status()
-                sc = int(r.json().get("score", 0))
+                response = session.post(ANSWER_URL, data=self._payload(name), timeout=20)
+                response.raise_for_status()
+                score = int(response.json().get("score", 0))
                 with self.lock:
+                    if self.stats is None:
+                        return
                     self.stats["ok"] += 1
-                    self.stats["score_sum"] += sc
-                    self.stats["scores"][sc] += 1
+                    self.stats["score_sum"] += score
+                    self.stats["scores"][score] += 1
                     self.rate_ts.append(time.time())
-                    self.stats["last"] = {"name": name, "score": sc}
-                self._log("ok", f"{name}  →  {sc}/{nq}")
-            except Exception as e:
-                # Closing sessions on stop makes in-flight requests throw;
-                # don't count those as real failures.
+                    self.stats["last"] = {"name": name, "score": score}
+                self._log("ok", f"{name}  →  {score}/{question_count}")
+            except Exception as exc:  # noqa: BLE001
                 if not self._stop.is_set():
                     with self.lock:
-                        self.stats["fail"] += 1
-                    self._log("err", f"{name}  →  {type(e).__name__}: {e}")
+                        if self.stats is not None:
+                            self.stats["fail"] += 1
+                    self._log("err", f"{name}  →  {type(exc).__name__}: {exc}")
             sent += 1
             if delay:
                 time.sleep(delay)
 
-    def _watch(self):
-        """Auto-stop once every worker has finished its share.
-
-        Only runs when a finite count was requested; for unlimited runs the
-        workers never exit and this thread simply parks forever. A manual
-        stop sets ``_stop`` first, so the watcher won't double-trigger.
-        """
-        for w in self.workers:
-            w.join()
+    def _watch(self) -> None:
+        """Auto-stop once every worker has finished its share."""
+        for worker in self.workers:
+            worker.join()
         if not self._stop.is_set() and self.running:
             self._log("sys", "all workers finished, auto-stopping")
             self.stop()
 
-    def start(self, cfg):
+    def start(self, cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Begin flooding with the given settings, spawning worker threads."""
         if self.running:
             return {"ok": False, "error": "already running"}
-        code = _quiz_code(cfg.get("code") or self.config["code"])
+
+        config_source = dict(self.config)
+        if cfg:
+            config_source.update(cfg)
+        try:
+            validated = validate_config(config_source)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        code = _quiz_code(validated.get("code") or self.config["code"])
         if not code:
             return {"ok": False, "error": "quiz code is required"}
         if not self.quiz or self.quiz.get("code") != code:
             self.load_quiz(code)
-        self.config.update(cfg)
+
+        self.config = validated
         self.config["code"] = code
-        self.save_config()
+        save_config(self.config)
         self._stop.clear()
         self._pause.set()
         self.paused = False
+
         total = max(0, int(self.config.get("count", 0)))
         n_threads = max(1, min(64, int(self.config.get("threads", 8))))
-        nq = len(self.quiz["questions"])
+        question_count = len(self.quiz["questions"])
         self.stats = {
             "total": total,
             "ok": 0,
             "fail": 0,
             "score_sum": 0,
-            "scores": [0] * (nq + 1),
+            "scores": [0] * (question_count + 1),
             "started": time.time(),
             "last": None,
         }
@@ -314,42 +273,37 @@ class Engine:
             for _ in range(n_threads)
         ]
         self.running = True
-        for w in self.workers:
-            w.start()
+        for worker in self.workers:
+            worker.start()
         self._watcher = threading.Thread(target=self._watch, daemon=True)
         self._watcher.start()
         self._log("sys", f"started: {n_threads} workers → {total if total else 'unlimited'}")
         return {"ok": True}
 
-    def stop(self):
-        """Signal all workers to stop and wait for them to exit.
-
-        In-flight requests are aborted by closing their sessions, and the
-        join is bounded to a few seconds total so the UI gets a fast reply
-        no matter how many workers were running.
-        """
+    def stop(self) -> Dict[str, Any]:
+        """Signal all workers to stop and wait for them to exit."""
         if not self.running:
             return {"ok": True}
         self._stop.set()
         with self.lock:
             sessions, self.sessions = self.sessions, []
-        for s in sessions:
+        for session in sessions:
             try:
-                s.close()
-            except Exception:
+                session.close()
+            except Exception:  # noqa: BLE001
                 pass
         deadline = time.time() + 3
-        for w in self.workers:
+        for worker in self.workers:
             remaining = deadline - time.time()
             if remaining <= 0:
                 break
-            w.join(timeout=remaining)
+            worker.join(timeout=remaining)
         self.running = False
         self.paused = False
         self._log("sys", "stopped")
         return {"ok": True}
 
-    def pause(self):
+    def pause(self) -> Dict[str, Any]:
         """Freeze all workers in place (they block until resumed)."""
         if not self.running:
             return {"ok": False, "error": "not running"}
@@ -358,7 +312,7 @@ class Engine:
         self._log("sys", "paused")
         return {"ok": True}
 
-    def resume(self):
+    def resume(self) -> Dict[str, Any]:
         if not self.running:
             return {"ok": False, "error": "not running"}
         self.paused = False
@@ -366,7 +320,7 @@ class Engine:
         self._log("sys", "resumed")
         return {"ok": True}
 
-    def status(self):
+    def status(self) -> Dict[str, Any]:
         """Snapshot of everything the dashboard needs for its next render."""
         with self.lock:
             st = dict(self.stats) if self.stats else None
@@ -380,12 +334,12 @@ class Engine:
                 "questions": len(self.quiz.get("questions") or []),
                 "values": bool(self.quiz.get("values")),
             }
+
         now = time.time()
-        # Throughput estimate: successes seen in the last 10 seconds.
         rate = 0.0
         if self.rate_ts:
             cutoff = now - 10
-            recent = [t for t in self.rate_ts if t >= cutoff]
+            recent = [timestamp for timestamp in self.rate_ts if timestamp >= cutoff]
             rate = len(recent) / 10.0
         remaining = 0
         elapsed = 0.0
@@ -407,29 +361,37 @@ class Engine:
             "log": log,
         }
 
-    def board_data(self, code):
+    def board_data(self, code: str) -> Dict[str, Any]:
         """Read the live leaderboard, caching it for a few seconds."""
         if self.board and self.board_code == code and time.time() - self.board_at < 3:
             return self.board
         try:
-            r = requests.get(BOARD_URL, params={"code": code}, timeout=15)
-            r.raise_for_status()
-            self.board = r.json()
+            response = requests.get(BOARD_URL, params={"code": code}, timeout=15)
+            response.raise_for_status()
+            self.board = response.json()
             self.board_code = code
             self.board_at = time.time()
             return self.board
-        except Exception:
+        except Exception:  # noqa: BLE001
             return {"error": "board unavailable"}
 
 
 engine = Engine()
 
 
-# --- Routes -----------------------------------------------------------
-
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "dashboard.html")
+
+
+@app.get("/healthz")
+def healthz():
+    return jsonify({"ok": True, "status": "healthy", "running": engine.running})
+
+
+@app.get("/readyz")
+def readyz():
+    return jsonify({"ok": True, "ready": True, "quiz_loaded": engine.quiz is not None})
 
 
 @app.get("/api/config")
@@ -440,68 +402,71 @@ def get_config():
 @app.post("/api/config")
 def post_config():
     data = request.get_json(force=True, silent=True) or {}
-    engine.config.update(data)
-    engine.save_config()
-    return jsonify({"config": engine.config})
+    try:
+        engine.config = validate_config({**engine.config, **data})
+        save_config(engine.config)
+        return jsonify({"config": engine.config})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.post("/api/load_quiz")
-def load_quiz():
+def load_quiz_route():
     data = request.get_json(force=True, silent=True) or {}
     code = (data.get("code") or engine.config["code"]).strip()
     try:
-        q = engine.load_quiz(code)
+        quiz = engine.load_quiz(code)
         return jsonify({
             "ok": True,
             "quiz": {
-                "title": q.get("title"),
-                "name": q.get("name"),
-                "code": q.get("code"),
-                "questions": len(q.get("questions") or []),
-                "values": bool(q.get("values")),
+                "title": quiz.get("title"),
+                "name": quiz.get("name"),
+                "code": quiz.get("code"),
+                "questions": len(quiz.get("questions") or []),
+                "values": bool(quiz.get("values")),
             },
         })
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.post("/api/start")
-def start():
+def start_route():
     data = request.get_json(force=True, silent=True) or {}
     try:
         return jsonify(engine.start(data))
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.post("/api/stop")
-def stop():
+def stop_route():
     return jsonify(engine.stop())
 
 
 @app.post("/api/pause")
-def pause():
+def pause_route():
     return jsonify(engine.pause())
 
 
 @app.post("/api/resume")
-def resume():
+def resume_route():
     return jsonify(engine.resume())
 
 
 @app.get("/api/status")
-def status():
+def status_route():
     return jsonify(engine.status())
 
 
 @app.get("/api/board")
-def board():
+def board_route():
     code = _quiz_code(request.args.get("code") or engine.config["code"])
     return jsonify(engine.board_data(code))
 
 
 if __name__ == "__main__":
     print(f"[*] FriendQuiz Flooder dashboard running at http://{HOST}:{PORT}")
-    if HOST in ("127.0.0.1", "localhost"):
+    if HOST in ("127.0.0.1", "localhost") and AUTO_OPEN:
         threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
-    app.run(host=HOST, port=PORT, threaded=True)
+    app.run(host=HOST, port=PORT, debug=False, threaded=True)
